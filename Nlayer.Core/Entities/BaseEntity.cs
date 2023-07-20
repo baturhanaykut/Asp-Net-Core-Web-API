@@ -12,6 +12,6 @@ namespace Nlayer.Core.Entities
 
         public DateTime CreatedDate { get; set; }
 
-        public DateTime UpdateDate { get; set; }
+        public DateTime? UpdateDate { get; set; }
     }
 }
