@@ -1,4 +1,11 @@
+using Autofac;
+using Autofac.Extensions.DependencyInjection;
+using FluentValidation.AspNetCore;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Nlayer.API.Filters;
+using Nlayer.API.Middlewares;
+using Nlayer.API.Modules;
 using Nlayer.Core.Repositories;
 using Nlayer.Core.Services;
 using Nlayer.Core.UnitOfWorks;
@@ -7,21 +14,38 @@ using Nlayer.Repository.Repositories;
 using Nlayer.Repository.UnitOfWorks;
 using Nlayer.Service.Mapping;
 using Nlayer.Service.Services;
+using Nlayer.Service.Validations;
 using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.Add(new ValidateFilterAttribute()))
+    .AddFluentValidation(x =>x.RegisterValidatorsFromAssemblyContaining<ProductDtoValidator>());
+
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    //Framwork'un kendi baskýlamýþ olduðu model filtresini baskýlamak için kullandýk.
+    options.SuppressModelStateInvalidFilter = true;
+});
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-builder.Services.AddScoped(typeof(IGenericRepository<>),typeof(GenericRepository<>));
-builder.Services.AddScoped(typeof(IServices<>),typeof(Service<>));
+builder.Services.AddScoped(typeof(NotFoundFilter<>));
 builder.Services.AddAutoMapper(typeof(MapProfile));
+
+#region Autofac Kullanýldý
+//builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+//builder.Services.AddScoped(typeof(IGenericRepository<>),typeof(GenericRepository<>));
+//builder.Services.AddScoped(typeof(IServices<>),typeof(Service<>));
+//builder.Services.AddScoped<IProductRepository,ProductRepository>();
+//builder.Services.AddScoped<IProductService,ProductService>();
+//builder.Services.AddScoped<ICategoryService, CategoryService>();
+//builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+#endregion
 
 builder.Services.AddDbContext<AppDbContext>(x =>
 {
@@ -30,6 +54,11 @@ builder.Services.AddDbContext<AppDbContext>(x =>
         options.MigrationsAssembly(Assembly.GetAssembly(typeof(AppDbContext)).GetName().Name);
     });
 });
+
+
+builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
+//Autofac Module dahil edilmek için yazýldý.
+builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder => containerBuilder.RegisterModule(new RepoServiceModule()));
 
 var app = builder.Build();
 
@@ -41,6 +70,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+//Custom Hata Fýrlatma ve middeleware için yazdýk.
+app.UseCustomException();
 
 app.UseAuthorization();
 
